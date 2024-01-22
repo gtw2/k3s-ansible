@@ -13,7 +13,7 @@ vars:
   BOOTSTRAP_CONFIG_FILE: "{{.BOOTSTRAP_DIR}}/vars/config.yaml"
   KUBECONFIG_FILE: "{{.ROOT_DIR}}/kubeconfig"
   MAKEJINJA_CONFIG_FILE: "{{.ROOT_DIR}}/makejinja.toml"
-  PYTHON_VERSION_CHECK_FILE: "{{.BOOTSTRAP_DIR}}/scripts/py_version_check.py"
+  PIP_REQUIREMENTS_FILE: "{{.ROOT_DIR}}/requirements.txt"
   SOPS_AGE_FILE: "{{.ROOT_DIR}}/age.key"
   # Binaries
   PYTHON_BIN: python3
@@ -37,7 +37,8 @@ tasks:
   default: task -l
 
   init:
-    desc: Initialize files and directories
+    desc: Initialize virtual env and configuration files
+    deps: ["setup-virtual-env"]
     cmds:
       - mkdir -p {{.PRIVATE_DIR}}
       - cp -n {{.BOOTSTRAP_ADDONS_FILE | replace ".yaml" ".sample.yaml"}} {{.BOOTSTRAP_ADDONS_FILE}}
@@ -50,41 +51,41 @@ tasks:
         silent: true
       - cmd: echo {{.BOOTSTRAP_ADDONS_FILE}}
         silent: true
-    status:
-      - test -f {{.BOOTSTRAP_ADDONS_FILE}}
-      - test -f {{.BOOTSTRAP_CONFIG_FILE}}
 
   configure:
-    desc: Configure repository from Ansible vars
+    desc: Configure repository from bootstrap vars
     prompt: Any conflicting config in the root kubernetes and ansible directories will be overwritten... continue?
+    deps: ["setup-virtual-env"]
     cmds:
-      - task: .pre-validate
       - task: .template
-      - task: .post-validate
-    preconditions:
-      - { msg: "Missing Python version check script", sh: "test -f {{.PYTHON_VERSION_CHECK_FILE}}" }
-      - { msg: "Python version must be 3.11 or greater", sh: "{{.PYTHON_BIN}} {{.PYTHON_VERSION_CHECK_FILE}}" }
+      - task: sops:encrypt
+      - task: .validate
 
-  .pre-validate:
-    internal: true
-    cmd: ./.venv/bin/ansible-playbook {{.BOOTSTRAP_DIR}}/validate.yaml
-    env:
-      ANSIBLE_DISPLAY_SKIPPED_HOSTS: "false"
+  setup-virtual-env:
+    desc: Set up virtual environment
+    cmds:
+      - "{{.PYTHON_BIN}} -m venv {{.ROOT_DIR}}/.venv"
+      - .venv/bin/python3 -m pip install --upgrade pip setuptools wheel
+      - .venv/bin/python3 -m pip install --upgrade --requirement "{{.PIP_REQUIREMENTS_FILE}}"
+    sources:
+      - "{{.PIP_REQUIREMENTS_FILE}}"
+    generates:
+      - "{{.ROOT_DIR}}/.venv/pyvenv.cfg"
     preconditions:
-      - { msg: "Missing virtual environment", sh: "test -d {{.ROOT_DIR}}/.venv" }
-      - { msg: "Missing bootstrap addons file", sh: "test -f {{.BOOTSTRAP_ADDONS_FILE}}" }
-      - { msg: "Missing bootstrap config file", sh: "test -f {{.BOOTSTRAP_CONFIG_FILE}}" }
+      - { msg: "Missing Pip requirements file", sh: "test -f {{.PIP_REQUIREMENTS_FILE}}" }
 
   .template:
     internal: true
     cmds:
       - ./.venv/bin/makejinja
-      - task: sops:encrypt
     preconditions:
+      - { msg: "Missing virtual environment", sh: "test -d {{.ROOT_DIR}}/.venv" }
       - { msg: "Missing Makejinja config file", sh: "test -f {{.MAKEJINJA_CONFIG_FILE}}" }
-      - { msg: "Missing Makejinja loader file", sh: "test -f {{.BOOTSTRAP_DIR}}/scripts/loader.py" }
+      - { msg: "Missing Makejinja plugin file", sh: "test -f {{.BOOTSTRAP_DIR}}/scripts/plugin.py" }
+      - { msg: "Missing bootstrap addons file", sh: "test -f {{.BOOTSTRAP_ADDONS_FILE}}" }
+      - { msg: "Missing bootstrap config file", sh: "test -f {{.BOOTSTRAP_CONFIG_FILE}}" }
 
-  .post-validate:
+  .validate:
     internal: true
     cmds:
       - task: kubernetes:kubeconform

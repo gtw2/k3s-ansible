@@ -46,7 +46,7 @@ If you are marching forward, now is a good time to choose whether you will deplo
 ### System requirements
 
 > [!IMPORTANT]
-> 1. The included behaviour of Talos, k0s or k3s is that all nodes are able to run workloads, **including** control nodes. Worker nodes are therefore optional.
+> 1. The included behaviour of Talos, k3s or k0s is that all nodes are able to run workloads, **including** control nodes. Worker nodes are therefore optional.
 > 2. Do you have 3 or more nodes? It is strongly recommended to make 3 of them control nodes for a highly available control plane.
 > 3. Running the cluster on Proxmox VE? My thoughts and recommendations about that are documented [here](https://onedr0p.github.io/home-ops/notes/proxmox-considerations.html).
 
@@ -193,12 +193,12 @@ Once you have installed Talos or Debian on your nodes, there are six stages to g
     go-task workstation:yay
     ```
 
-4. Setup a Python virual env and install Ansible by running the following task command.
+4. Setup a Python virual env by running the following task command.
 
     📍 _This commands requires Python 3.11+ to be installed._
 
     ```sh
-    task ansible:deps
+    task setup-virtual-env
     ```
 
 5. Continue on to 🔧 [**Stage 3**](#-stage-3-do-bootstrap-configuration)
@@ -278,52 +278,60 @@ Once you have installed Talos or Debian on your nodes, there are six stages to g
 
 7. Once done run the following command which will verify and generate all the files needed to continue.
 
-    > [!NOTE]
-    > The following configure task will create a `./ansible` directory for k3s or k0s and the following directories under `./kubernetes`.
-    > ```sh
-    > 📁 kubernetes      # Kubernetes cluster defined as code
-    > ├─📁 bootstrap     # Flux installation (not tracked by Flux)
-    > ├─📁 flux          # Main Flux configuration of repository
-    > └─📁 apps          # Apps deployed into the cluster grouped by namespace
-    > ```
+    📍 _The following configure task will create a `./ansible` directory for k3s or k0s and the following directories under `./kubernetes` for all distributions_
 
     ```sh
     task configure
     ```
 
-8. Continue on to ⚡ [**Stage 4**](#-stage-4-prepare-your-nodes-for-kubernetes)
+8. Push you changes to git
 
+   📍 **Verify** all the `*.sops.yaml` and `*.sops.yaml` files under the `./ansible`, and `./kubernetes` directories are **encrypted** with SOPS
+
+    ```sh
+    git add -A
+    git commit -m "Initial commit :rocket:"
+    git push
+    ```
+
+9. Continue on to ⚡ [**Stage 4**](#-stage-4-prepare-your-nodes-for-kubernetes)
 
 ### ⚡ Stage 4: Prepare your nodes for Kubernetes
 
 > [!NOTE]
-> For **Talos** skip ahead to ⛵ [**Stage 5**](#-stage-5-install-kubernetes)
+> For **Talos** or **k0s** skip ahead to ⛵ [**Stage 5**](#-stage-5-install-kubernetes)
 
-#### k3s or k0s
+#### k3s
 
 📍 _Here we will be running an Ansible playbook to prepare your nodes for running a Kubernetes cluster._
 
 1. Ensure you are able to SSH into your nodes from your workstation using a private SSH key **without a passphrase** (for example using a SSH agent). This lets Ansible interact with your nodes.
 
-2. Verify Ansible can view your config
+3. Install the Ansible dependencies
+
+    ```sh
+    task ansible:deps
+    ```
+
+4. Verify Ansible can view your config
 
     ```sh
     task ansible:list
     ```
 
-3. Verify Ansible can ping your nodes
+5. Verify Ansible can ping your nodes
 
     ```sh
     task ansible:ping
     ```
 
-4. Run the Ansible prepare playbook (nodes wil reboot when done)
+6. Run the Ansible prepare playbook (nodes wil reboot when done)
 
     ```sh
     task ansible:run playbook=cluster-prepare
     ```
 
-5. Continue on to ⛵ [**Stage 5**](#-stage-5-install-kubernetes)
+7. Continue on to ⛵ [**Stage 5**](#-stage-5-install-kubernetes)
 
 ### ⛵ Stage 5: Install Kubernetes
 
@@ -397,17 +405,7 @@ Once you have installed Talos or Debian on your nodes, there are six stages to g
     # ✔ prerequisites checks passed
     ```
 
-2. Push you changes to git
-
-   📍 **Verify** all the `*.sops.yaml` and `*.sops.yaml` files under the `./ansible`, and `./kubernetes` directories are **encrypted** with SOPS
-
-    ```sh
-    git add -A
-    git commit -m "Initial commit :rocket:"
-    git push
-    ```
-
-3. Install Flux and sync the cluster to the Git repository
+2. Install Flux and sync the cluster to the Git repository
 
     ```sh
     task flux:bootstrap
@@ -416,7 +414,7 @@ Once you have installed Talos or Debian on your nodes, there are six stages to g
     # ...
     ```
 
-4. Verify Flux components are running in the cluster
+3. Verify Flux components are running in the cluster
 
     ```sh
     kubectl -n flux-system get pods -o wide
