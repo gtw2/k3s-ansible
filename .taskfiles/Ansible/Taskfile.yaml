@@ -77,9 +77,9 @@ tasks:
   .setup-virtual-env:
     internal: true
     cmds:
-      - "{{.PYTHON_BIN}} -m venv {{.ROOT_DIR}}/.venv"
-      - .venv/bin/python3 -m pip install --upgrade pip setuptools wheel
-      - .venv/bin/python3 -m pip install --upgrade --requirement "{{.PIP_REQUIREMENTS_FILE}}"
+      - "python3.11 -m venv {{.ROOT_DIR}}/.venv"
+      - .venv/bin/python3.11 -m pip install --upgrade pip setuptools wheel
+      - .venv/bin/python3.11 -m pip install --upgrade --requirement "{{.PIP_REQUIREMENTS_FILE}}"
       - .venv/bin/ansible-galaxy install --role-file "{{.ANSIBLE_REQUIREMENTS_FILE}}" {{if eq .force "true"}}--force{{end}}
     sources:
       - "{{.PIP_REQUIREMENTS_FILE}}"
